@@ -11,10 +11,13 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <inttypes.h>
-
+#include <unistd.h>
+#include <arpa/inet.h>
 #include <signal.h>
 #include <sys/signalfd.h>
 #include <gtk/gtk.h>
+
+
 
 
 #define MAXDATASIZE 256
@@ -309,7 +312,6 @@ void sensitive_loop(int sensitiveState) {
         for (char c = 'A'; c <= 'H'; c++) {
             evt[8] = c;
             evt[9] = i;
-            printf("%s\n", evt);
             gtk_widget_set_sensitive((GtkWidget *) gtk_builder_get_object(p_builder, evt), sensitiveState);
         }
     }
@@ -455,7 +457,6 @@ int main(int argc, char **argv) {
                 for (char c = 'A'; c <= 'H'; c++) {
                     evt[8] = c;
                     evt[9] = i;
-                    printf("%s\n", evt);
                     g_signal_connect(gtk_builder_get_object(p_builder, evt), "button_press_event",
                                      G_CALLBACK(coup_joueur), NULL);
                 }
@@ -484,6 +485,30 @@ int main(int argc, char **argv) {
             /***** TO DO *****/
 
             // Initialisation socket et autres objets, et création thread pour communications avec joueur adverse
+
+            struct addrinfo s_init, *servinfo;
+            memset(&s_init, 0, sizeof(s_init));
+            s_init.ai_family = AF_INET;
+            s_init.ai_socktype = SOCK_STREAM;
+            s_init.ai_flags = AI_PASSIVE;
+
+            if (getaddrinfo(NULL, port, &s_init, &servinfo) != 0) {
+                fprintf(stderr, "Erreur getaddrinfo\n");
+                exit(1);
+            }
+            int sock_fd;
+            if ((sock_fd = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol)) == -1) {
+                perror("Serveur: socket");
+            }
+            if (bind(sock_fd, servinfo->ai_addr, servinfo->ai_addrlen) == -1) {
+                close(sock_fd);
+                perror("Serveur: erreur bind");
+            }
+
+            //pthread_create();
+
+
+
 
 
 

@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 project(Projet_FIP2_Cavalier_etudiant C)
 
+set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
-set(SOURCE_FILES main.cpp)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${GCC_COVERAGE_COMPILE_FLAGS}")
 
 add_executable(cavalier_GUI cavalier_GUI.c)
 
@@ -19,4 +20,9 @@ target_link_libraries(cavalier_GUI ${GTK3_LIBRARIES})
 target_link_libraries(cavalier_GUI Threads::Threads)
 
 file(COPY UI_Glade DESTINATION "${CMAKE_BINARY_DIR}")
+
+set(GCC_COVERAGE_COMPILE_FLAGS "-Wall")
+
+
+
 
