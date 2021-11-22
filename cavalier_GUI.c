@@ -280,7 +280,33 @@ void affiche_fenetre_perdu(void) {
 /* Fonction appelee lors du clique du bouton Se connecter */
 static void clique_connect_serveur(GtkWidget *b) {
     /***** TO DO *****/
+    int sockfd, rv;
+    struct addrinfo hints, *servinfo, *p;
 
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    rv = getaddrinfo(lecture_addr_serveur(), lecture_port_serveur(), &hints, &servinfo);
+
+    if(rv != 0)
+    {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+        exit(1);
+    }
+
+    for(p = servinfo; p != NULL; p = p->ai_next)
+    {
+        if((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+            perror("Erreur socket Client");
+            continue;
+        }
+        if((connect(sockfd, p->ai_addr, p->ai_addrlen)) == -1) {
+            close(sockfd);
+            perror("Erreur de connexion qu serveur");
+            continue;
+        }
+        break;
+    }
 }
 
 /* Fonction desactivant bouton demarrer partie */
@@ -411,13 +437,14 @@ static void *f_com_socket(void *p_arg) {
                 if (i == fd_signal) {
                     /* Cas où de l'envoie du signal par l'interface graphique pour connexion au joueur adverse */
                     /***** TO DO *****/
+                    //client
+                    //newsockfd=accept
 
                 }
 
-                if (i == sockfd) { // Acceptation connexion adversaire
-                    /***** TO DO *****/
-
-                    gtk_widget_set_sensitive((GtkWidget *) gtk_builder_get_object(p_builder, "button_start"), FALSE);
+                if (i == sockfd) { //
+                    newsockfd = accept(newsockfd, (struct sockaddr *) &their_addr, &addr_size);
+                    FD_SET(newsockfd,&master);
                 } else { // Reception et traitement des messages du joueur adverse
                     /***** TO DO *****/
 
@@ -483,10 +510,12 @@ int main(int argc, char **argv) {
             }
 
             /***** TO DO *****/
+            pthread_create(&thr_id, NULL, f_com_socket, argv[1]);
 
             // Initialisation socket et autres objets, et création thread pour communications avec joueur adverse
+            struct addrinfo s_init, *servinfo, *p;
+            struct sockaddr client_addr;
 
-            struct addrinfo s_init, *servinfo;
             memset(&s_init, 0, sizeof(s_init));
             s_init.ai_family = AF_INET;
             s_init.ai_socktype = SOCK_STREAM;
@@ -496,22 +525,33 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "Erreur getaddrinfo\n");
                 exit(1);
             }
-            int sock_fd;
-            if ((sock_fd = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol)) == -1) {
-                perror("Serveur: socket");
+
+            for(p = servinfo; p != NULL; p = p->ai_next) {
+                if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+                    perror("Serveur: socket");
+                    continue;
+                }
+
+                if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+                    close(sockfd);
+                    perror("Serveur: erreur bind");
+                    continue;
+                }
+                break;
             }
-            if (bind(sock_fd, servinfo->ai_addr, servinfo->ai_addrlen) == -1) {
-                close(sock_fd);
-                perror("Serveur: erreur bind");
+            if (p == NULL) {
+                fprintf(stderr, "Serveur: echec bind\n");
+                exit(2);
+            }
+            freeaddrinfo(servinfo);
+            if (listen(sockfd, 5) == -1) {
+                perror("listen");
+                exit(1);
             }
 
-            //pthread_create();
-
-
-
-
-
-
+            FD_ZERO(&master);
+            FD_ZERO(&read_fds);
+            FD_SET(sockfd,&master);
 
 
             gtk_widget_show_all(p_win);
@@ -521,6 +561,7 @@ int main(int argc, char **argv) {
             g_error ("%s", p_err->message);
             g_error_free(p_err);
         }
+
     }
     return EXIT_SUCCESS;
 }
