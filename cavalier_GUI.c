@@ -34,7 +34,7 @@ char *addr_j2, *port_j2;    // Info sur adversaire
 
 pthread_t thr_id;    // Id du thread fils gerant connexion socket
 
-int sockfd, newsockfd = -1; // descripteurs de socket
+int sockfd, newsockfd, sockfd_swp = -1; // descripteurs de socket
 int addr_size;     // taille adresse
 struct sockaddr *their_addr;    // structure pour stocker adresse adversaire
 
@@ -387,14 +387,17 @@ void affich_joueur(char *login, char *adresse, char *port) {
 }
 
 /* Fonction exécutée par le thread gérant les communications à travers la socket */
-static void *f_com_socket(void *p_arg) {
+/* Fonction exécutée par le thread gérant les communications à travers la socket */
+static void * f_com_socket(void *p_arg){
     int i, nbytes, col, lig;
 
     char buf[MAXDATASIZE], *tmp, *p_parse;
     int len, bytes_sent, t_msg_recu;
 
     sigset_t signal_mask;
-    int fd_signal;
+    int fd_signal, rv;
+    char* serveur = "127.0.0.1";
+    struct addrinfo hints, *servinfo, *p;
 
     uint16_t type_msg, col_j2;
     uint16_t ucol, ulig;
@@ -403,52 +406,146 @@ static void *f_com_socket(void *p_arg) {
     sigemptyset(&signal_mask);
     sigaddset(&signal_mask, SIGUSR1);
 
-    if (sigprocmask(SIG_BLOCK, &signal_mask, NULL) == -1) {
-        printf("[Pourt joueur %d] Erreur sigprocmask\n", port);
+    if(sigprocmask(SIG_BLOCK, &signal_mask, NULL) == -1){
+        printf("[Port joueur : %d] Erreur sigprocmask\n", port);
         return 0;
     }
 
     fd_signal = signalfd(-1, &signal_mask, 0);
 
-    if (fd_signal == -1) {
-        printf("[port joueur %d] Erreur signalfd\n", port);
+    if(fd_signal == -1){
+        printf("[Port joueur : %d] Erreur signalfd\n", port);
         return 0;
     }
 
     /* Ajout descripteur du signal dans ensemble de descripteur utilisé avec fonction select */
     FD_SET(fd_signal, &master);
 
-    if (fd_signal > fdmax) {
-        fdmax = fd_signal;
+    if(fd_signal>fdmax){
+        fdmax=fd_signal;
     }
-    while (1) {
-        read_fds = master;    // copie des ensembles
 
-        if (select(fdmax + 1, &read_fds, &write_fds, NULL, NULL) == -1) {
+
+    while(1){
+        read_fds = master;  // copie des ensembles
+
+        if(select(fdmax+1, &read_fds, &write_fds, NULL, NULL)==-1){
             perror("Problème avec select");
             exit(4);
         }
+        //printf("[Port joueur : %d] Entree dans boucle for\n", port);
+        for(i = 0; i <= fdmax; i++){
+            //printf("[Port joueur : %d] newsockfd=%d, iteration %d boucle for\n", port, newsockfd, i);
 
-        printf("[Port joueur %d] Entree dans boucle for\n", port);
-        for (i = 0; i <= fdmax; i++) {
-            printf("[Port joueur %d] newsockfd=%d, iteration %d boucle for\n", port, newsockfd, i);
+            if(FD_ISSET(i, &read_fds)){
+                if(i == fd_signal){
+                    /* Cas de l'envoie du signal par l'interface graphique pour connexion au joueur adverse */
 
-            if (FD_ISSET(i, &read_fds)) {
-                if (i == fd_signal) {
-                    /* Cas où de l'envoie du signal par l'interface graphique pour connexion au joueur adverse */
-                    /***** TO DO *****/
-                    //client
-                    //newsockfd=accept
+                    // partie client
+                    close(fd_signal);
+                    FD_CLR(fd_signal, &master);
 
+                    close(sockfd);
+                    FD_CLR(sockfd, &master);
+
+                    memset(&hints, 0, sizeof(hints));
+                    hints.ai_family = AF_UNSPEC;
+                    hints.ai_socktype = SOCK_STREAM;
+
+                    printf("Info serveur : %s:%s\n", addr_j2, port_j2);
+                    //rv = getaddrinfo(serveur, p_arg, &hints, &servinfo);
+                    rv = getaddrinfo("127.0.0.1", port_j2, &hints, &servinfo);
+
+                    if(rv != 0) {
+                        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+                        exit(1);
+                    }
+
+                    for(p = servinfo; p != NULL; p = p->ai_next) {
+                        if((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+                            perror("client: socket");
+                            continue;
+                        }
+                        printf("Client connexion au serveur joueur adverse\n");
+                        if((rv=connect(sockfd, p->ai_addr, p->ai_addrlen)) == -1) {
+                            close(sockfd);
+                            perror("client: connect");
+                            continue;
+                        }
+                        break;
+                    }
+
+                    if(p == NULL)
+                    {
+                        printf("ERREUR sortie boucle p==NULL\n");
+                    }else{
+                        FD_SET(sockfd, &master);
+                        if(sockfd > fdmax){
+                            fdmax = sockfd;
+                        }
+                        init_interface_jeu();
+                        // Cavalier Noir
+                        damier[7][7] = 0;
+                        couleur = 0;
+                    }
                 }
+                if(i == sockfd){
+                    /* Acceptation connexion adversaire */
 
-                if (i == sockfd) { //
-                    newsockfd = accept(newsockfd, (struct sockaddr *) &their_addr, &addr_size);
-                    FD_SET(newsockfd,&master);
-                } else { // Reception et traitement des messages du joueur adverse
+                    // partie server
+
+                    printf("Serveur port :  %s \n", (char *)p_arg);
+
+                    addr_size = sizeof(their_addr);
+
+                    newsockfd = accept(sockfd, (struct sockaddr *) &their_addr, &addr_size);
+
+                    if (newsockfd == -1) {
+                        perror("accept");
+                    }
+
+                    FD_SET(newsockfd, &master);
+                    if(newsockfd > fdmax){
+                        fdmax = newsockfd;
+                    }
+
+                    printf("New client receive\n");
+                    init_interface_jeu();
+                    // Cavalier Blanc
+                    couleur = 1;
+                    damier[0][0] = 1;
+                    gele_damier(); // Joueur jouant en deuxième
+                }else{
+                    /* Reception et traitement des messages du joueur adverse */
+
                     /***** TO DO *****/
+                    printf("\nReception des messages du joueur adverses\n");
 
+                    // stockage de la socket client ou serveur dans une même variable globale pour le traitement des messages
+                    if(newsockfd == -1)
+                        sockfd_swp = newsockfd;
+                    else
+                        sockfd_swp = sockfd;
 
+                    printf("sockfd_echange : %d\n", sockfd_swp);
+
+                    /*
+                     0 : pour noir,
+                     1 : pour blanc,
+                     3 : pour pion,
+                     4 : pion avec cavalier noir,
+                     5 : pion avec cavalier blanc
+                    */
+
+                    // Clique sur damier
+                    // La case est une case jouable
+                    // La case est une case injouable
+                    // La case est une case pion
+                    /* Gèle du damier adverse */
+                    /* Dégèle du damier du joueur */
+
+                    printf("---- TRAITEMENT MESSAGE ADVERSE ----\n");
+                    printf("col : %d - lig : %d\n", col, lig);
                 }
             }
         }
@@ -514,14 +611,13 @@ int main(int argc, char **argv) {
 
             // Initialisation socket et autres objets, et création thread pour communications avec joueur adverse
             struct addrinfo s_init, *servinfo, *p;
-            struct sockaddr client_addr;
 
             memset(&s_init, 0, sizeof(s_init));
             s_init.ai_family = AF_INET;
             s_init.ai_socktype = SOCK_STREAM;
             s_init.ai_flags = AI_PASSIVE;
 
-            if (getaddrinfo(NULL, port, &s_init, &servinfo) != 0) {
+            if (getaddrinfo(NULL, argv[1], &s_init, &servinfo) != 0) {
                 fprintf(stderr, "Erreur getaddrinfo\n");
                 exit(1);
             }
@@ -552,7 +648,6 @@ int main(int argc, char **argv) {
             FD_ZERO(&master);
             FD_ZERO(&read_fds);
             FD_SET(sockfd,&master);
-
 
             gtk_widget_show_all(p_win);
             gtk_main();
