@@ -23,7 +23,27 @@
 #define MAXDATASIZE 256
 
 
+struct point2D{
+    int lig;
+    int col;
+};
+
+struct point2D deplacements[8] ={
+        {.lig=1,.col=2},
+        {.lig=2,.col=1},
+        {.lig=-2,.col=1},
+        {.lig=-1,.col=2},
+        {.lig=-2,.col=-1},
+        {.lig=-1,.col=-2},
+        {.lig=2,.col=-1},
+        {.lig=1,.col=-2},
+         };
+
+
 /* Variables globales */
+
+
+
 int damier[8][8];    // tableau associe au damier
 int couleur;        // 0 : pour noir, 1 : pour blanc, 3 : pour pion, 4 : pion avec cavalier noir, 5 : pion avec cavalier blanc
 
@@ -34,7 +54,7 @@ char *addr_j2, *port_j2;    // Info sur adversaire
 
 pthread_t thr_id;    // Id du thread fils gerant connexion socket
 
-int sockfd, newsockfd, sockfd_swp = -1; // descripteurs de socket
+int sockfd, newsockfd =-1, sockfd_swp = -1; // descripteurs de socket
 int addr_size;     // taille adresse
 struct sockaddr *their_addr;    // structure pour stocker adresse adversaire
 
@@ -145,6 +165,7 @@ void affiche_cav_noir(int col, int lig) {
     char *coord;
     coord = malloc(3 * sizeof(char));
     indexes_to_coord(col, lig, coord);
+    damier[col][lig]=0;
     gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_cav_noir.png");
 }
 
@@ -153,7 +174,20 @@ void affiche_cav_blanc(int col, int lig) {
     char *coord;
     coord = malloc(3 * sizeof(char));
     indexes_to_coord(col, lig, coord);
+    damier[col][lig]=1;
     gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_cav_blanc.png");
+}
+
+
+void affiche_deplacement(int col, int lig){
+    for(int i=0;i<8;i++){
+        int availableCol=col+deplacements[i].col;
+        int availableLig=lig+deplacements[i].lig;
+        if(availableCol<=0 || availableLig <=0 || availableCol>=7 || availableLig>=7){
+
+        }
+    }
+
 }
 
 
@@ -340,7 +374,6 @@ void affich_joueur(char *login, char *adresse, char *port) {
             GTK_TEXT_VIEW(gtk_builder_get_object(p_builder, "textview_joueurs")))), joueur, strlen(joueur));
 }
 
-/* Fonction exécutée par le thread gérant les communications à travers la socket */
 /* Fonction exécutée par le thread gérant les communications à travers la socket */
 static void * f_com_socket(void *p_arg){
     int i, nbytes, col, lig;
