@@ -180,12 +180,16 @@ void affiche_cav_blanc(int col, int lig) {
 
 
 void affiche_deplacement(int col, int lig){
+    char *coord;
+    coord = malloc(3 * sizeof(char));
     for(int i=0;i<8;i++){
         int availableCol=col+deplacements[i].col;
         int availableLig=lig+deplacements[i].lig;
-        if(availableCol<=0 || availableLig <=0 || availableCol>=7 || availableLig>=7){
-
+        if (availableCol > 0 && availableLig > 0 && availableCol < 7 && availableLig < 7){
+            indexes_to_coord(availableCol, availableLig, coord);
+            gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_dispo.png");
         }
+
     }
 
 }
@@ -200,7 +204,13 @@ static void coup_joueur(GtkWidget *p_case) {
     coord_to_indexes(gtk_buildable_get_name(GTK_BUILDABLE(gtk_bin_get_child(GTK_BIN(p_case)))), &col, &lig);
 
 
+
+
     /***** TO DO *****/
+
+    printf("Lig: %d, Col: %d\n",lig,col);
+
+
 
 }
 
@@ -346,6 +356,8 @@ void init_interface_jeu(void) {
     // Initilisation du damier (A1=cavalier_noir, H8=cavalier_blanc)
     affiche_cav_blanc(7, 7);
     affiche_cav_noir(0, 0);
+
+    affiche_deplacement(0,0);
 
     /***** TO DO *****/
 
