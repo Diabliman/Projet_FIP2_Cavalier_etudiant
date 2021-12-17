@@ -120,61 +120,15 @@ void coord_to_indexes(const gchar *coord, int *col, int *lig) {
     c = strncpy(c, coord, 1);
     c[1] = '\0';
 
-    if (strcmp(c, "A") == 0) {
-        *col = 0;
-    }
-    if (strcmp(c, "B") == 0) {
-        *col = 1;
-    }
-    if (strcmp(c, "C") == 0) {
-        *col = 2;
-    }
-    if (strcmp(c, "D") == 0) {
-        *col = 3;
-    }
-    if (strcmp(c, "E") == 0) {
-        *col = 4;
-    }
-    if (strcmp(c, "F") == 0) {
-        *col = 5;
-    }
-    if (strcmp(c, "G") == 0) {
-        *col = 6;
-    }
-    if (strcmp(c, "H") == 0) {
-        *col = 7;
-    }
+    *col = 'A' + strcmp(c, "A");
+
     *lig = atoi(coord + 1) - 1;
 }
 
 /* Fonction transforme coordonnees du damier graphique en indexes pour matrice du damier */
 void indexes_to_coord(int col, int lig, char *coord) {
     char c;
-
-    if (col == 0) {
-        c = 'A';
-    }
-    if (col == 1) {
-        c = 'B';
-    }
-    if (col == 2) {
-        c = 'C';
-    }
-    if (col == 3) {
-        c = 'D';
-    }
-    if (col == 4) {
-        c = 'E';
-    }
-    if (col == 5) {
-        c = 'F';
-    }
-    if (col == 6) {
-        c = 'G';
-    }
-    if (col == 7) {
-        c = 'H';
-    }
+    c = 'A' + col;
     sprintf(coord, "%c%d\0", c, lig + 1);
 }
 
