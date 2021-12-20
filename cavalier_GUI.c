@@ -28,6 +28,9 @@ struct point2D{
     int col;
 };
 
+
+/* Variables globales */
+
 struct point2D deplacements[8] ={
         {.lig=1,.col=2},
         {.lig=2,.col=1},
@@ -37,12 +40,10 @@ struct point2D deplacements[8] ={
         {.lig=-1,.col=-2},
         {.lig=2,.col=-1},
         {.lig=1,.col=-2},
-         };
+};
 
-
-/* Variables globales */
-
-
+struct point2D bl_pos = {.col=-1,.lig=-1};
+struct point2D wh_pos = {.col=-1,.lig=-1};
 
 int damier[8][8];    // tableau associe au damier
 int couleur;        // 0 : pour noir, 1 : pour blanc, 3 : pour pion, 4 : pion avec cavalier noir, 5 : pion avec cavalier blanc
@@ -140,7 +141,7 @@ void coord_to_indexes(const gchar *coord, int *col, int *lig) {
     c = strncpy(c, coord, 1);
     c[1] = '\0';
 
-    *col = 'A' + strcmp(c, "A");
+    *col = strcmp(c, "A");
 
     *lig = atoi(coord + 1) - 1;
 }
@@ -179,21 +180,46 @@ void affiche_cav_blanc(int col, int lig) {
 }
 
 
-void affiche_deplacement(int col, int lig){
+void affiche_deplacement(){
     char *coord;
     coord = malloc(3 * sizeof(char));
+    int col, lig;
+    if(couleur==0){
+        col=bl_pos.col;
+        lig=bl_pos.lig;
+    }else if(couleur==1){
+        col=wh_pos.col;
+        lig=wh_pos.lig;
+    }
     for(int i=0;i<8;i++){
         int availableCol=col+deplacements[i].col;
         int availableLig=lig+deplacements[i].lig;
-        if (availableCol > 0 && availableLig > 0 && availableCol < 7 && availableLig < 7){
+        if (availableCol >= 0 && availableLig >= 0 && availableCol < 7 && availableLig < 7){
             indexes_to_coord(availableCol, availableLig, coord);
-            gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_dispo.png");
+            gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_pion.png");
         }
-
     }
-
 }
 
+int is_valid_pos(int lig,int col){
+    int playerCol,playerLig;
+    if(couleur==0){
+        playerCol=bl_pos.col;
+        playerLig=bl_pos.lig;
+    }else if(couleur==1){
+        playerCol=wh_pos.col;
+        playerLig=wh_pos.lig;
+    }
+    for(int i=0;i<8;i++){
+        int availableCol=playerCol+deplacements[i].col;
+        int availableLig=playerLig+deplacements[i].lig;
+        if (availableCol == col && availableLig == lig){
+            printf("validLig: %d,validCol: %d\n",playerLig,playerCol);
+            return 1;
+        }
+    }
+    return 0;
+}
 
 /* Fonction appelee lors du clique sur une case du damier */
 static void coup_joueur(GtkWidget *p_case) {
@@ -203,12 +229,30 @@ static void coup_joueur(GtkWidget *p_case) {
     // Traduction coordonnees damier en indexes matrice damier
     coord_to_indexes(gtk_buildable_get_name(GTK_BUILDABLE(gtk_bin_get_child(GTK_BIN(p_case)))), &col, &lig);
 
+    affiche_deplacement();
+
+    int pos_result = is_valid_pos(lig,col);
+
+    if(pos_result==1){
+        if(couleur==1){
+            affiche_pion(wh_pos.col,wh_pos.lig);
+            affiche_cav_blanc(col,lig);
+            couleur=0;
+        }
+        else if(couleur==0){
+            affiche_pion(bl_pos.col,bl_pos.lig);
+            affiche_cav_noir(col,lig);
+            couleur=1;
+        }
+
+    }
 
 
 
     /***** TO DO *****/
 
-    printf("Lig: %d, Col: %d\n",lig,col);
+
+    printf("Lig: %d, Col: %d, valid_pos: %d\n",lig,col,pos_result);
 
 
 
@@ -357,7 +401,6 @@ void init_interface_jeu(void) {
     affiche_cav_blanc(7, 7);
     affiche_cav_noir(0, 0);
 
-    affiche_deplacement(0,0);
 
     /***** TO DO *****/
 
@@ -484,8 +527,11 @@ static void * f_com_socket(void *p_arg){
                         }
                         init_interface_jeu();
                         // Cavalier Noir
+                        bl_pos.lig=7;
+                        bl_pos.col=7;
                         damier[7][7] = 0;
                         couleur = 0;
+                        affiche_deplacement();
                     }
                 }
                 if(i == sockfd){
@@ -512,7 +558,10 @@ static void * f_com_socket(void *p_arg){
                     init_interface_jeu();
                     // Cavalier Blanc
                     couleur = 1;
+                    wh_pos.col=0;
+                    wh_pos.lig=0;
                     damier[0][0] = 1;
+                    affiche_deplacement();
                     gele_damier(); // Joueur jouant en deuxième
                 }else{
                     /* Reception et traitement des messages du joueur adverse */
