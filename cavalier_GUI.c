@@ -18,8 +18,6 @@
 #include <gtk/gtk.h>
 
 
-
-
 #define MAXDATASIZE 256
 
 
@@ -62,6 +60,7 @@ struct sockaddr *their_addr;    // structure pour stocker adresse adversaire
 fd_set master, read_fds, write_fds;    // ensembles de socket pour toutes les sockets actives avec select
 int fdmax;            // utilise pour select
 
+uint16_t taille_msg, nb;
 
 /* Variables globales associées à l'interface graphique */
 GtkBuilder *p_builder = NULL;
@@ -223,8 +222,12 @@ int is_valid_pos(int lig,int col){
 
 /* Fonction appelee lors du clique sur une case du damier */
 static void coup_joueur(GtkWidget *p_case) {
+    //type_msg = 0 :
+    //type_msg = 1 : win
+    //type_msg = 2 : loose
     int col, lig, type_msg, nb_piece, score;
     char buf[MAXDATASIZE];
+    char head[2], buffer_type[2];
 
     // Traduction coordonnees damier en indexes matrice damier
     coord_to_indexes(gtk_buildable_get_name(GTK_BUILDABLE(gtk_bin_get_child(GTK_BIN(p_case)))), &col, &lig);
@@ -245,11 +248,58 @@ static void coup_joueur(GtkWidget *p_case) {
             couleur=1;
         }
 
+        snprintf(buf,MAXDATASIZE,"%u,%u,", htons((uint16_t) lig), htons((uint16_t) col));
+
+        //implémenter la logique de jeu win/loose
+        type_msg = 0;
+        nb = htons((uint16_t) type_msg);
+        memcpy(buffer_type, &nb, 2);
+
+        if(send(newsockfd,buffer_type,2, 0)==-1){
+            perror("send type_msg");
+        }
+        // taille du msg
+        taille_msg = htons((uint16_t) strlen(buf));
+        memcpy(head, &taille_msg, 2);
+        send(newsockfd,head,2,0);
+
+        if(send(newsockfd, buf, strlen(buf), 0) == -1){
+            perror("send");
+        }
+        gele_damier();
+
     }
 
 
+/*
+    char msg[50];
 
-    /***** TO DO *****/
+    uint16_t taille_msg, type_ms;
+    char head[2];
+
+    printf("Client : alright time to send deez nuts\n");
+
+    snprintf(msg, 50, "%u,%u,", htons((uint16_t) lig), htons((uint16_t) col));
+
+    taille_msg=htons((uint16_t) strlen(msg));
+    memcpy(head, &taille_msg, 2);
+
+    if(newsockfd=-1){ // on est du côté client sinon, on est du côté serveur
+        type_ms = htons((uint16_t) '1');
+        send(sockfd, type_ms, 2, 0);
+        send(sockfd, head, 2, 0);
+
+        if(send(sockfd, msg, strlen(msg), 0) == -1) {
+            perror("send client");
+        }
+        printf("Client : sent deez nuts\n");
+    } else {
+        send(newsockfd, head, 2, 0);
+
+        if(send(newsockfd, msg, strlen(msg), 0) == -1) {
+            perror("send serveur");
+        }
+    }*/
 
 
     printf("Lig: %d, Col: %d, valid_pos: %d\n",lig,col,pos_result);
@@ -349,6 +399,8 @@ static void clique_connect_serveur(GtkWidget *b) {
         }
         break;
     }
+
+
 }
 
 /* Fonction desactivant bouton demarrer partie */
@@ -484,14 +536,10 @@ static void * f_com_socket(void *p_arg){
                     /* Cas de l'envoie du signal par l'interface graphique pour connexion au joueur adverse */
 
                     // partie client
-                    close(fd_signal);
-                    FD_CLR(fd_signal, &master);
-
-                    close(sockfd);
-                    FD_CLR(sockfd, &master);
 
                     memset(&hints, 0, sizeof(hints));
-                    hints.ai_family = AF_UNSPEC;
+                    hints.ai_family = AF_INET;
+                    hints.ai_flags = AI_PASSIVE;
                     hints.ai_socktype = SOCK_STREAM;
 
                     printf("Info serveur : %s:%s\n", addr_j2, port_j2);
@@ -504,13 +552,13 @@ static void * f_com_socket(void *p_arg){
                     }
 
                     for(p = servinfo; p != NULL; p = p->ai_next) {
-                        if((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+                        if((newsockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
                             perror("client: socket");
                             continue;
                         }
                         printf("Client connexion au serveur joueur adverse\n");
-                        if((rv=connect(sockfd, p->ai_addr, p->ai_addrlen)) == -1) {
-                            close(sockfd);
+                        if((rv=connect(newsockfd, p->ai_addr, p->ai_addrlen)) == -1) {
+                            close(newsockfd);
                             perror("client: connect");
                             continue;
                         }
@@ -520,20 +568,27 @@ static void * f_com_socket(void *p_arg){
                     if(p == NULL)
                     {
                         printf("ERREUR sortie boucle p==NULL\n");
-                    }else{
-                        FD_SET(sockfd, &master);
-                        if(sockfd > fdmax){
-                            fdmax = sockfd;
-                        }
-                        init_interface_jeu();
-                        // Cavalier Noir
-                        bl_pos.lig=7;
-                        bl_pos.col=7;
-                        damier[7][7] = 0;
-                        couleur = 0;
-                        affiche_deplacement();
                     }
-                }
+
+                    close(fd_signal);
+                    FD_CLR(fd_signal, &master);
+
+                    close(sockfd);
+                    FD_CLR(sockfd, &master);
+
+
+                    FD_SET(newsockfd, &master);
+                    if(newsockfd > fdmax){
+                        fdmax = newsockfd;
+                    }
+                    init_interface_jeu();
+                    // Cavalier Noir
+                    bl_pos.lig=7;
+                    bl_pos.col=7;
+                    damier[7][7] = 0;
+                    couleur = 0;
+                    affiche_deplacement();
+                    }
                 if(i == sockfd){
                     /* Acceptation connexion adversaire */
 
@@ -563,37 +618,42 @@ static void * f_com_socket(void *p_arg){
                     damier[0][0] = 1;
                     affiche_deplacement();
                     gele_damier(); // Joueur jouant en deuxième
-                }else{
+                } else {
                     /* Reception et traitement des messages du joueur adverse */
 
-                    /***** TO DO *****/
                     printf("\nReception des messages du joueur adverses\n");
 
-                    // stockage de la socket client ou serveur dans une même variable globale pour le traitement des messages
-                    if(newsockfd == -1)
-                        sockfd_swp = newsockfd;
-                    else
-                        sockfd_swp = sockfd;
+                    char head[2], buffer_type[5];
 
-                    printf("sockfd_echange : %d\n", sockfd_swp);
+                    recv(newsockfd, buffer_type, 2, 0);
+                    memcpy(&nb, buffer_type, 2);
+                    int msg_type = (int)ntohs(nb);
+                    printf("type du msg : %d\n", msg_type);
 
-                    /*
-                     0 : pour noir,
-                     1 : pour blanc,
-                     3 : pour pion,
-                     4 : pion avec cavalier noir,
-                     5 : pion avec cavalier blanc
-                    */
+                    if(msg_type == 0){
+                        //réseau
+                        recv(newsockfd, head, 2, 0);
+                        memcpy(&taille_msg, head, 2);
+                        t_msg_recu = (int) ntohs (taille_msg);
+                        printf("taille du msg : %d\n", t_msg_recu);
 
-                    // Clique sur damier
-                    // La case est une case jouable
-                    // La case est une case injouable
-                    // La case est une case pion
-                    /* Gèle du damier adverse */
-                    /* Dégèle du damier du joueur */
+                        recv(newsockfd, buf, t_msg_recu*sizeof(char), 0);
+                        tmp = strtok_r(buf,",",&p_parse);
+                        sscanf(tmp, "%u", &nb);
+                        lig = (int) ntohs(nb);
 
-                    printf("---- TRAITEMENT MESSAGE ADVERSE ----\n");
-                    printf("col : %d - lig : %d\n", col, lig);
+                        tmp = strtok_r(NULL,",",&p_parse);
+                        sscanf(tmp, "%u", &nb);
+                        col = (int) ntohs(nb);
+
+                        printf("---- TRAITEMENT MESSAGE ADVERSE ----\n");
+                        printf("col : %d - lig : %d\n", col, lig);
+
+                        memset(buf, 0, sizeof buf);
+
+                        //graphique
+                        degele_damier();
+                    }
                 }
             }
         }
