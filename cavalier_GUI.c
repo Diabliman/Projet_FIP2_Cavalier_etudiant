@@ -132,6 +132,9 @@ void affich_joueur(char *login, char *adresse, char *port);
 
 void sensitive_loop(int sensitiveState);
 
+void send_message(int type_msg, struct point2D coords);
+
+int receive_message(void);
 
 /* Fonction transforme coordonnees du damier graphique en indexes pour matrice du damier */
 void coord_to_indexes(const gchar *coord, int *col, int *lig) {
@@ -220,14 +223,37 @@ int is_valid_pos(int lig,int col){
     return 0;
 }
 
+void send_message(int type_msg, struct point2D coords){
+    char buf[MAXDATASIZE];
+    char head[2], buffer_type[2];
+    snprintf(buf,MAXDATASIZE,"%u,%u,", htons((uint16_t) coords.lig), htons((uint16_t) coords.col));
+
+    //implémenter la logique de jeu win/loose
+    nb = htons((uint16_t) type_msg);
+    memcpy(buffer_type, &nb, 2);
+
+    if(send(newsockfd,buffer_type,2, 0)==-1){
+        perror("send type_msg");
+    }
+    //taille du message
+    taille_msg = htons((uint16_t) strlen(buf));
+    memcpy(head, &taille_msg, 2);
+    send(newsockfd, head, 2, 0);
+
+    //coords
+    if(send(newsockfd, buf, strlen(buf), 0) == -1){
+        perror("send");
+    }
+
+}
+
 /* Fonction appelee lors du clique sur une case du damier */
 static void coup_joueur(GtkWidget *p_case) {
     //type_msg = 0 :
     //type_msg = 1 : win
     //type_msg = 2 : loose
     int col, lig, type_msg, nb_piece, score;
-    char buf[MAXDATASIZE];
-    char head[2], buffer_type[2];
+
 
     // Traduction coordonnees damier en indexes matrice damier
     coord_to_indexes(gtk_buildable_get_name(GTK_BUILDABLE(gtk_bin_get_child(GTK_BIN(p_case)))), &col, &lig);
@@ -247,25 +273,12 @@ static void coup_joueur(GtkWidget *p_case) {
             affiche_cav_noir(col,lig);
             couleur=1;
         }
-
-        snprintf(buf,MAXDATASIZE,"%u,%u,", htons((uint16_t) lig), htons((uint16_t) col));
-
-        //implémenter la logique de jeu win/loose
         type_msg = 0;
-        nb = htons((uint16_t) type_msg);
-        memcpy(buffer_type, &nb, 2);
+        struct point2D coords = {
+                .lig=lig,.col=col
+        };
 
-        if(send(newsockfd,buffer_type,2, 0)==-1){
-            perror("send type_msg");
-        }
-        // taille du msg
-        taille_msg = htons((uint16_t) strlen(buf));
-        memcpy(head, &taille_msg, 2);
-        send(newsockfd,head,2,0);
-
-        if(send(newsockfd, buf, strlen(buf), 0) == -1){
-            perror("send");
-        }
+        send_message(type_msg, coords);
         gele_damier();
 
     }
@@ -481,13 +494,42 @@ void affich_joueur(char *login, char *adresse, char *port) {
             GTK_TEXT_VIEW(gtk_builder_get_object(p_builder, "textview_joueurs")))), joueur, strlen(joueur));
 }
 
+int receive_message(void){
+    char buf[MAXDATASIZE], head[5], buffer_type[5], *tmp, *p_parse;
+    int len, bytes_sent, t_msg_recu;
+    int col, lig;
+
+    recv(newsockfd, buffer_type, 2, 0);
+    memcpy(&nb, buffer_type, 2);
+    int msg_type = (int)ntohs(nb);
+    printf("type du msg : %d\n", msg_type);
+
+    if(msg_type == 0){
+        //réseau
+        recv(newsockfd, head, 2, 0);
+        memcpy(&taille_msg, head, 2);
+        t_msg_recu = (int) ntohs(taille_msg);
+        printf("taille du message : %d\n", t_msg_recu);
+
+        //coordonnees
+        recv(newsockfd, buf, t_msg_recu*sizeof(char), 0);
+        tmp = strtok_r(buf,",",&p_parse);
+        sscanf(tmp, "%u", &nb);
+        lig = (int) ntohs(nb);
+
+        tmp = strtok_r(NULL,",",&p_parse);
+        sscanf(tmp, "%u", &nb);
+        col = (int) ntohs(nb);
+
+        printf("---- TRAITEMENT MESSAGE ADVERSE ----\n");
+        printf("col : %d - lig : %d\n", col, lig);
+    }
+    return msg_type;
+}
+
 /* Fonction exécutée par le thread gérant les communications à travers la socket */
 static void * f_com_socket(void *p_arg){
-    int i, nbytes, col, lig;
-
-    char buf[MAXDATASIZE], *tmp, *p_parse;
-    int len, bytes_sent, t_msg_recu;
-
+    int i;
     sigset_t signal_mask;
     int fd_signal, rv;
     char* serveur = "127.0.0.1";
@@ -623,37 +665,10 @@ static void * f_com_socket(void *p_arg){
 
                     printf("\nReception des messages du joueur adverses\n");
 
-                    char head[2], buffer_type[5];
-
-                    recv(newsockfd, buffer_type, 2, 0);
-                    memcpy(&nb, buffer_type, 2);
-                    int msg_type = (int)ntohs(nb);
-                    printf("type du msg : %d\n", msg_type);
-
-                    if(msg_type == 0){
-                        //réseau
-                        recv(newsockfd, head, 2, 0);
-                        memcpy(&taille_msg, head, 2);
-                        t_msg_recu = (int) ntohs (taille_msg);
-                        printf("taille du msg : %d\n", t_msg_recu);
-
-                        recv(newsockfd, buf, t_msg_recu*sizeof(char), 0);
-                        tmp = strtok_r(buf,",",&p_parse);
-                        sscanf(tmp, "%u", &nb);
-                        lig = (int) ntohs(nb);
-
-                        tmp = strtok_r(NULL,",",&p_parse);
-                        sscanf(tmp, "%u", &nb);
-                        col = (int) ntohs(nb);
-
-                        printf("---- TRAITEMENT MESSAGE ADVERSE ----\n");
-                        printf("col : %d - lig : %d\n", col, lig);
-
-                        memset(buf, 0, sizeof buf);
-
-                        //graphique
+                    if(receive_message()==0){
                         degele_damier();
                     }
+
                 }
             }
         }
