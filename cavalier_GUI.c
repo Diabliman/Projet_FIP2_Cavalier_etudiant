@@ -43,6 +43,8 @@ struct point2D deplacements[8] ={
 struct point2D bl_pos = {.col=-1,.lig=-1};
 struct point2D wh_pos = {.col=-1,.lig=-1};
 
+enum couleur { BL = 0, WH = 1, PION = 3, BL_PION = 4, WH_PION = 5 };
+
 int damier[8][8];    // tableau associe au damier
 int couleur;        // 0 : pour noir, 1 : pour blanc, 3 : pour pion, 4 : pion avec cavalier noir, 5 : pion avec cavalier blanc
 
@@ -132,6 +134,12 @@ void affich_joueur(char *login, char *adresse, char *port);
 
 void sensitive_loop(int sensitiveState);
 
+int can_move(int col, int lig);
+int check_wh_win();
+int wh_can_reach_bl();
+int check_bl_win();
+int available_path();
+
 void send_message(int type_msg, struct point2D coords);
 
 int receive_message(void);
@@ -186,10 +194,10 @@ void affiche_deplacement(){
     char *coord;
     coord = malloc(3 * sizeof(char));
     int col, lig;
-    if(couleur==0){
+    if(couleur==BL){
         col=bl_pos.col;
         lig=bl_pos.lig;
-    }else if(couleur==1){
+    }else if(couleur==WH){
         col=wh_pos.col;
         lig=wh_pos.lig;
     }
@@ -205,10 +213,10 @@ void affiche_deplacement(){
 
 int is_valid_pos(int lig,int col){
     int playerCol,playerLig;
-    if(couleur==0){
+    if(couleur==BL){
         playerCol=bl_pos.col;
         playerLig=bl_pos.lig;
-    }else if(couleur==1){
+    }else if(couleur==WH){
         playerCol=wh_pos.col;
         playerLig=wh_pos.lig;
     }
@@ -219,6 +227,56 @@ int is_valid_pos(int lig,int col){
             printf("validLig: %d,validCol: %d\n",playerLig,playerCol);
             return 1;
         }
+    }
+    return 0;
+}
+
+int check_win(){
+    if(couleur==WH){
+        return check_wh_win();
+    }else if(couleur==BL){
+        return check_bl_win();
+    }
+}
+
+
+int check_wh_win(){
+    if(can_move(bl_pos.col,bl_pos.lig) == 0)
+        return 1;
+    if(wh_can_reach_bl()){
+        return 1;
+    }
+    return 0;
+}
+
+int check_bl_win(){
+    if(can_move(wh_pos.col,wh_pos.lig)==0)
+        return 1;
+    if(available_path() == 0){
+        return 1;
+    }
+    return 0;
+}
+
+int available_path(){
+  //TODO pathfinding pour vérifier que wh a un chemin vers bl
+  return 1;
+}
+
+int wh_can_reach_bl(){
+    for(int i=0;i<8;i++){
+        if(wh_pos.col+deplacements[i].col == bl_pos.col && wh_pos.lig+deplacements[i].lig==bl_pos.lig)
+            return 1;
+    }
+    return 0;
+}
+
+int can_move(int col, int lig){
+    for(int i=0;i<8;i++){
+        int possibleCol=col+deplacements[i].col;
+        int possibleLig=lig+deplacements[i].lig;
+        if((possibleCol >=0 && possibleCol < 8 ) && (possibleLig >=0 && possibleLig < 8) && damier[col][lig] != PION)
+            return 1;
     }
     return 0;
 }
@@ -251,7 +309,7 @@ void send_message(int type_msg, struct point2D coords){
 static void coup_joueur(GtkWidget *p_case) {
     //type_msg = 0 :
     //type_msg = 1 : win
-    //type_msg = 2 : loose
+    //type_msg = 2 : lose
     int col, lig, type_msg, nb_piece, score;
 
 
@@ -263,15 +321,13 @@ static void coup_joueur(GtkWidget *p_case) {
     int pos_result = is_valid_pos(lig,col);
 
     if(pos_result==1){
-        if(couleur==1){
+        if(couleur==WH){
             affiche_pion(wh_pos.col,wh_pos.lig);
             affiche_cav_blanc(col,lig);
-            couleur=0;
         }
-        else if(couleur==0){
+        else if(couleur==BL){
             affiche_pion(bl_pos.col,bl_pos.lig);
             affiche_cav_noir(col,lig);
-            couleur=1;
         }
         type_msg = 0;
         struct point2D coords = {
@@ -628,7 +684,7 @@ static void * f_com_socket(void *p_arg){
                     bl_pos.lig=7;
                     bl_pos.col=7;
                     damier[7][7] = 0;
-                    couleur = 0;
+                    couleur = BL;
                     affiche_deplacement();
                     }
                 if(i == sockfd){
@@ -654,7 +710,7 @@ static void * f_com_socket(void *p_arg){
                     printf("New client receive\n");
                     init_interface_jeu();
                     // Cavalier Blanc
-                    couleur = 1;
+                    couleur = WH;
                     wh_pos.col=0;
                     wh_pos.lig=0;
                     damier[0][0] = 1;
@@ -668,7 +724,6 @@ static void * f_com_socket(void *p_arg){
                     if(receive_message()==0){
                         degele_damier();
                     }
-
                 }
             }
         }
