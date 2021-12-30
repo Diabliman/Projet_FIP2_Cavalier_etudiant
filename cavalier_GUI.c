@@ -139,6 +139,7 @@ int check_wh_win();
 int wh_can_reach_bl();
 int check_bl_win();
 int available_path();
+char* get_image_from_code();
 
 void send_message(int type_msg, struct point2D coords);
 
@@ -168,6 +169,7 @@ void affiche_pion(int col, int lig) {
     char *coord;
     coord = malloc(3 * sizeof(char));
     indexes_to_coord(col, lig, coord);
+    damier[col][lig]=3;
     gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_pion.png");
 }
 
@@ -176,8 +178,20 @@ void affiche_cav_noir(int col, int lig) {
     char *coord;
     coord = malloc(3 * sizeof(char));
     indexes_to_coord(col, lig, coord);
-    damier[col][lig]=0;
+    bl_pos.col=col;
+    bl_pos.lig=lig;
+    damier[col][lig]=BL;
     gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_cav_noir.png");
+}
+
+void print_damier(){
+    for(int col=0;col<8;col++){
+        for(int lig=0;lig<8;lig++){
+            printf("%d ",damier[col][lig]);
+        }
+        printf("\n");
+    }
+    printf("\n");
 }
 
 /* Fonction permettant afficher image cavalier blanc dans case du damier (indiqué par sa colonne et sa ligne) */
@@ -185,8 +199,45 @@ void affiche_cav_blanc(int col, int lig) {
     char *coord;
     coord = malloc(3 * sizeof(char));
     indexes_to_coord(col, lig, coord);
-    damier[col][lig]=1;
+    wh_pos.col=col;
+    wh_pos.lig=lig;
+    damier[col][lig]=WH;
     gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_cav_blanc.png");
+}
+
+
+void refresh_map(){
+    char *coord;
+    coord = malloc(3 * sizeof(char));
+    for(int i=0;i<8;i++){
+        for(int j=0;j<8;j++){
+            indexes_to_coord(i, j, coord);
+            int code=damier[i][j];
+            if(code!=-1) {
+                char *imageUrl = get_image_from_code(code);
+                gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), imageUrl);
+                if(code==-2){
+                    damier[i][j]=-1;
+                }
+            }
+        }
+    }
+}
+
+char* get_image_from_code(int code){
+    switch(code){
+        case WH:
+            return "UI_Glade/case_cav_blanc.png";
+        case BL:
+            return "UI_Glade/case_cav_noir.png";
+        case PION:
+            return "UI_Glade/case_pion.png";
+        case -2:
+            return "UI_Glade/case_def.png";
+        default:
+            printf("Error code %d invalide",code);
+            exit(-1);
+    }
 }
 
 
@@ -204,9 +255,10 @@ void affiche_deplacement(){
     for(int i=0;i<8;i++){
         int availableCol=col+deplacements[i].col;
         int availableLig=lig+deplacements[i].lig;
-        if (availableCol >= 0 && availableLig >= 0 && availableCol < 7 && availableLig < 7){
+        if ((availableCol >= 0 && availableLig >= 0 && availableCol < 7 && availableLig < 7) && damier[availableCol][availableLig]==-1){
+            damier[availableCol][availableLig]=-2;
             indexes_to_coord(availableCol, availableLig, coord);
-            gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_pion.png");
+            gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_dispo.png");
         }
     }
 }
@@ -224,7 +276,6 @@ int is_valid_pos(int lig,int col){
         int availableCol=playerCol+deplacements[i].col;
         int availableLig=playerLig+deplacements[i].lig;
         if (availableCol == col && availableLig == lig){
-            printf("validLig: %d,validCol: %d\n",playerLig,playerCol);
             return 1;
         }
     }
@@ -316,27 +367,23 @@ static void coup_joueur(GtkWidget *p_case) {
     // Traduction coordonnees damier en indexes matrice damier
     coord_to_indexes(gtk_buildable_get_name(GTK_BUILDABLE(gtk_bin_get_child(GTK_BIN(p_case)))), &col, &lig);
 
-    affiche_deplacement();
-
     int pos_result = is_valid_pos(lig,col);
 
     if(pos_result==1){
         if(couleur==WH){
             affiche_pion(wh_pos.col,wh_pos.lig);
             affiche_cav_blanc(col,lig);
+            send_message(0, wh_pos);
         }
         else if(couleur==BL){
             affiche_pion(bl_pos.col,bl_pos.lig);
             affiche_cav_noir(col,lig);
+            send_message(0, bl_pos);
         }
-        type_msg = 0;
-        struct point2D coords = {
-                .lig=lig,.col=col
-        };
-
-        send_message(type_msg, coords);
         gele_damier();
-
+    }
+    else{
+        printf("Error:  col: %d lig: %d is not available\n",col,lig);
     }
 
 
@@ -369,10 +416,6 @@ static void coup_joueur(GtkWidget *p_case) {
             perror("send serveur");
         }
     }*/
-
-
-    printf("Lig: %d, Col: %d, valid_pos: %d\n",lig,col,pos_result);
-
 
 
 }
@@ -522,7 +565,6 @@ void init_interface_jeu(void) {
     affiche_cav_blanc(7, 7);
     affiche_cav_noir(0, 0);
 
-
     /***** TO DO *****/
 
 }
@@ -576,6 +618,14 @@ int receive_message(void){
         tmp = strtok_r(NULL,",",&p_parse);
         sscanf(tmp, "%u", &nb);
         col = (int) ntohs(nb);
+        if(couleur==WH){
+            affiche_pion(bl_pos.col,bl_pos.lig);
+            affiche_cav_noir(col,lig);
+
+        }else if(couleur==BL){
+            affiche_pion(wh_pos.col,wh_pos.lig);
+            affiche_cav_blanc(col,lig);
+        }
 
         printf("---- TRAITEMENT MESSAGE ADVERSE ----\n");
         printf("col : %d - lig : %d\n", col, lig);
@@ -628,7 +678,6 @@ static void * f_com_socket(void *p_arg){
         //printf("[Port joueur : %d] Entree dans boucle for\n", port);
         for(i = 0; i <= fdmax; i++){
             //printf("[Port joueur : %d] newsockfd=%d, iteration %d boucle for\n", port, newsockfd, i);
-
             if(FD_ISSET(i, &read_fds)){
                 if(i == fd_signal){
                     /* Cas de l'envoie du signal par l'interface graphique pour connexion au joueur adverse */
@@ -679,13 +728,10 @@ static void * f_com_socket(void *p_arg){
                     if(newsockfd > fdmax){
                         fdmax = newsockfd;
                     }
-                    init_interface_jeu();
+
                     // Cavalier Noir
-                    bl_pos.lig=7;
-                    bl_pos.col=7;
-                    damier[7][7] = 0;
+                    init_interface_jeu();
                     couleur = BL;
-                    affiche_deplacement();
                     }
                 if(i == sockfd){
                     /* Acceptation connexion adversaire */
@@ -708,22 +754,24 @@ static void * f_com_socket(void *p_arg){
                     }
 
                     printf("New client receive\n");
-                    init_interface_jeu();
+
                     // Cavalier Blanc
+                    init_interface_jeu();
                     couleur = WH;
-                    wh_pos.col=0;
-                    wh_pos.lig=0;
-                    damier[0][0] = 1;
-                    affiche_deplacement();
+
                     gele_damier(); // Joueur jouant en deuxième
                 } else {
                     /* Reception et traitement des messages du joueur adverse */
-
+                    printf("BL col : %d, BL lig : %d\n",bl_pos.col,bl_pos.lig);
+                    printf("WH col : %d, BL lig : %d\n",wh_pos.col,wh_pos.lig);
+                    refresh_map();
                     printf("\nReception des messages du joueur adverses\n");
-
+                    int win=check_win();
+                    affiche_deplacement();
                     if(receive_message()==0){
                         degele_damier();
                     }
+                    print_damier();
                 }
             }
         }
