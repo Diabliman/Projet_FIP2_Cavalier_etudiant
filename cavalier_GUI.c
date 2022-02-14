@@ -3,8 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
-#include <sys/ipc.h>
-#include <sys/sem.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/select.h>
@@ -12,7 +10,6 @@
 #include <netdb.h>
 #include <inttypes.h>
 #include <unistd.h>
-#include <arpa/inet.h>
 #include <signal.h>
 #include <sys/signalfd.h>
 #include <gtk/gtk.h>
@@ -41,13 +38,14 @@ struct point2D deplacements[8] ={
         {.lig=1,.col=-2},
 };
 
+// Position des deux joueurs
 struct point2D bl_pos;
 struct point2D wh_pos;
 
 enum couleur { BL = 0, WH = 1, PION = 3, DEFAULT=-1, AVAILABLE=-2 };
 
 int damier[8][8];    // tableau associe au damier
-int couleur;        // 0 : pour noir, 1 : pour blanc, 3 : pour pion, 4 : pion avec cavalier noir, 5 : pion avec cavalier blanc
+int couleur;        // 0 : pour noir, 1 : pour blanc
 
 int port;        // numero port passé lors de l'appel
 
@@ -172,8 +170,8 @@ void affiche_pion(int col, int lig) {
     char *coord;
     coord = malloc(3 * sizeof(char));
     indexes_to_coord(col, lig, coord);
-    damier[col][lig]=3;
-    gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_pion.png");
+    damier[col][lig]=PION;
+    gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), get_image_from_code(PION));
 }
 
 // Imprime le damier à des fins de débug
@@ -195,7 +193,7 @@ void affiche_cav_noir(int col, int lig) {
     bl_pos.col=col;
     bl_pos.lig=lig;
     damier[col][lig]=BL;
-    gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_cav_noir.png");
+    gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), get_image_from_code(BL));
 }
 
 
@@ -207,7 +205,7 @@ void affiche_cav_blanc(int col, int lig) {
     wh_pos.col=col;
     wh_pos.lig=lig;
     damier[col][lig]=WH;
-    gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_cav_blanc.png");
+    gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), get_image_from_code(WH));
 }
 
 // Remet à jour la map selon les valeurs du damier
@@ -246,7 +244,7 @@ char* get_image_from_code(int code){
         case AVAILABLE:
             return "UI_Glade/case_dispo.png";
         case DEFAULT:
-            return "UI_GLade/case_def.png";
+            return "UI_Glade/case_def.png";
         default:
             printf("Error code %d invalide",code);
             exit(-1);
@@ -261,11 +259,9 @@ void affiche_deplacement(){
     if(couleur==BL){
         col=bl_pos.col;
         lig=bl_pos.lig;
-        printf("joueur actif pos : %d %d \n",bl_pos.col,bl_pos.lig);
     }else if(couleur==WH){
         col=wh_pos.col;
         lig=wh_pos.lig;
-        printf("joueur actif pos : %d %d \n",wh_pos.col,wh_pos.lig);
     }
     else{
         printf("Error couleur invalide\n");
@@ -277,10 +273,9 @@ void affiche_deplacement(){
         if ((availableCol >= 0 && availableLig >= 0 && availableCol < 8 && availableLig < 8) && damier[availableCol][availableLig]==-1){
             damier[availableCol][availableLig]=-2;
             indexes_to_coord(availableCol, availableLig, coord);
-            gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_dispo.png");
+            gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), get_image_from_code(AVAILABLE));
         }
     }
-    print_damier();
 }
 
 //Vérifie si la position est comprise dans les cases disponibles
@@ -302,19 +297,17 @@ int is_valid_pos(int lig,int col){
     }
     return 0;
 }
-
+// Vérifie la victoire du joueur courant et envoie un message de défaite à l'adversaire
 void check_win(){
     int win;
     if(couleur==WH){
         win = check_wh_win();
-        printf("win : %d\n",win);
         if(win==1){
             send_message(1,wh_pos);
             affiche_fenetre_gagne();
         }
     }else if(couleur==BL){
         win = check_bl_win();
-        printf("win : %d\n",win);
         if(win == 1){
             send_message(1,bl_pos);
             affiche_fenetre_gagne();
@@ -364,6 +357,7 @@ int can_move(int col, int lig){
     return 0;
 }
 
+//Envoie un message à l'autre joueur comprenant les nouvelles coordonnées de son adversaire
 void send_message(int type_msg, struct point2D coords){
     char buf[MAXDATASIZE];
     char head[2], buffer_type[2];
@@ -415,7 +409,7 @@ static void coup_joueur(GtkWidget *p_case) {
         gele_damier();
     }
     else{
-        printf("Error:  col: %d lig: %d is not available\n",col,lig);
+        printf("Error: col: %d lig: %d is not available\n",col,lig);
         print_damier();
     }
 
@@ -784,7 +778,6 @@ static void * f_com_socket(void *p_arg){
                     }
 
                     check_win();
-                    //print_damier();
                 }
             }
         }
