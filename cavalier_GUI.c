@@ -40,8 +40,8 @@ struct point2D deplacements[8] ={
         {.lig=1,.col=-2},
 };
 
-struct point2D bl_pos = {.col=-1,.lig=-1};
-struct point2D wh_pos = {.col=-1,.lig=-1};
+struct point2D bl_pos;
+struct point2D wh_pos;
 
 enum couleur { BL = 0, WH = 1, PION = 3, BL_PION = 4, WH_PION = 5 };
 
@@ -248,9 +248,15 @@ void affiche_deplacement(){
     if(couleur==BL){
         col=bl_pos.col;
         lig=bl_pos.lig;
+        printf("joueur actif pos : %d %d \n",bl_pos.col,bl_pos.lig);
     }else if(couleur==WH){
         col=wh_pos.col;
         lig=wh_pos.lig;
+        printf("joueur actif pos : %d %d \n",wh_pos.col,wh_pos.lig);
+    }
+    else{
+        printf("Error couleur invalide\n");
+        exit(-1);
     }
     for(int i=0;i<8;i++){
         int availableCol=col+deplacements[i].col;
@@ -261,6 +267,7 @@ void affiche_deplacement(){
             gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_dispo.png");
         }
     }
+    print_damier();
 }
 
 int is_valid_pos(int lig,int col){
@@ -275,7 +282,7 @@ int is_valid_pos(int lig,int col){
     for(int i=0;i<8;i++){
         int availableCol=playerCol+deplacements[i].col;
         int availableLig=playerLig+deplacements[i].lig;
-        if (availableCol == col && availableLig == lig){
+        if (availableCol == col && availableLig == lig && damier[availableCol][availableLig]==-2 ){
             return 1;
         }
     }
@@ -286,14 +293,14 @@ void check_win(){
     int win;
     if(couleur==WH){
         win = check_wh_win();
-        printf("win : %d",win);
+        printf("win : %d\n",win);
         if(win==1){
             send_message(1,wh_pos);
             affiche_fenetre_gagne();
         }
     }else if(couleur==BL){
         win = check_bl_win();
-        printf("win : %d",win);
+        printf("win : %d\n",win);
         if(win == 1){
             send_message(1,bl_pos);
             affiche_fenetre_gagne();
@@ -391,10 +398,12 @@ static void coup_joueur(GtkWidget *p_case) {
             affiche_cav_noir(col,lig);
             send_message(0, bl_pos);
         }
+        refresh_map();
         gele_damier();
     }
     else{
         printf("Error:  col: %d lig: %d is not available\n",col,lig);
+        print_damier();
     }
 
 
@@ -746,6 +755,7 @@ static void * f_com_socket(void *p_arg){
                     // Cavalier Noir
                     init_interface_jeu();
                     couleur = BL;
+                    affiche_deplacement();
                 }
                 if(i == sockfd){
                     /* Acceptation connexion adversaire */
@@ -776,15 +786,16 @@ static void * f_com_socket(void *p_arg){
                     gele_damier(); // Joueur jouant en deuxième
                 } else {
                     /* Reception et traitement des messages du joueur adverse */
+                    printf("\nReception des messages du joueur adverse\n");
+
                     printf("BL col : %d, BL lig : %d\n",bl_pos.col,bl_pos.lig);
                     printf("WH col : %d, BL lig : %d\n",wh_pos.col,wh_pos.lig);
-                    refresh_map();
-                    printf("\nReception des messages du joueur adverses\n");
-                    check_win();
-                    affiche_deplacement();
                     if(receive_message()==0){
                         degele_damier();
+                        affiche_deplacement();
                     }
+
+                    check_win();
                     //print_damier();
                 }
             }
