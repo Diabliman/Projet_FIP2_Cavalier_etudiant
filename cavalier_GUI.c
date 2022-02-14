@@ -282,11 +282,22 @@ int is_valid_pos(int lig,int col){
     return 0;
 }
 
-int check_win(){
+void check_win(){
+    int win;
     if(couleur==WH){
-        return check_wh_win();
+        win = check_wh_win();
+        printf("win : %d",win);
+        if(win==1){
+            send_message(1,wh_pos);
+            affiche_fenetre_gagne();
+        }
     }else if(couleur==BL){
-        return check_bl_win();
+        win = check_bl_win();
+        printf("win : %d",win);
+        if(win == 1){
+            send_message(1,bl_pos);
+            affiche_fenetre_gagne();
+        }
     }
 }
 
@@ -310,8 +321,8 @@ int check_bl_win(){
 }
 
 int available_path(){
-  //TODO pathfinding pour vérifier que wh a un chemin vers bl
-  return 1;
+    //TODO pathfinding pour vérifier que wh a un chemin vers bl
+    return 1;
 }
 
 int wh_can_reach_bl(){
@@ -630,6 +641,9 @@ int receive_message(void){
         printf("---- TRAITEMENT MESSAGE ADVERSE ----\n");
         printf("col : %d - lig : %d\n", col, lig);
     }
+    if(msg_type==1){
+        affiche_fenetre_perdu();
+    }
     return msg_type;
 }
 
@@ -732,7 +746,7 @@ static void * f_com_socket(void *p_arg){
                     // Cavalier Noir
                     init_interface_jeu();
                     couleur = BL;
-                    }
+                }
                 if(i == sockfd){
                     /* Acceptation connexion adversaire */
 
@@ -766,12 +780,12 @@ static void * f_com_socket(void *p_arg){
                     printf("WH col : %d, BL lig : %d\n",wh_pos.col,wh_pos.lig);
                     refresh_map();
                     printf("\nReception des messages du joueur adverses\n");
-                    int win=check_win();
+                    check_win();
                     affiche_deplacement();
                     if(receive_message()==0){
                         degele_damier();
                     }
-                    print_damier();
+                    //print_damier();
                 }
             }
         }
@@ -853,6 +867,8 @@ int main(int argc, char **argv) {
                     perror("Serveur: socket");
                     continue;
                 }
+                int option=1;
+                setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
 
                 if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
                     close(sockfd);
