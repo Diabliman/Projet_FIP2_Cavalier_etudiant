@@ -54,7 +54,7 @@ char *addr_j2, *port_j2;    // Info sur adversaire
 
 pthread_t thr_id;    // Id du thread fils gerant connexion socket
 
-int sockfd, newsockfd =-1, sockfd_swp = -1; // descripteurs de socket
+int sockfd, newsockfd =-1; // descripteurs de socket
 int addr_size;     // taille adresse
 struct sockaddr *their_addr;    // structure pour stocker adresse adversaire
 
