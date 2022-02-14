@@ -16,6 +16,7 @@
 #include <signal.h>
 #include <sys/signalfd.h>
 #include <gtk/gtk.h>
+#include <X11/Xlib.h>
 
 
 #define MAXDATASIZE 256
@@ -139,7 +140,9 @@ int check_wh_win();
 int wh_can_reach_bl();
 int check_bl_win();
 int available_path();
-char* get_image_from_code();
+char* get_image_from_code(int code);
+int is_valid_pos(int lig,int col);
+void affiche_deplacement();
 
 void send_message(int type_msg, struct point2D coords);
 
@@ -261,7 +264,7 @@ void affiche_deplacement(){
     for(int i=0;i<8;i++){
         int availableCol=col+deplacements[i].col;
         int availableLig=lig+deplacements[i].lig;
-        if ((availableCol >= 0 && availableLig >= 0 && availableCol < 7 && availableLig < 7) && damier[availableCol][availableLig]==-1){
+        if ((availableCol >= 0 && availableLig >= 0 && availableCol < 8 && availableLig < 8) && damier[availableCol][availableLig]==-1){
             damier[availableCol][availableLig]=-2;
             indexes_to_coord(availableCol, availableLig, coord);
             gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_dispo.png");
@@ -344,7 +347,7 @@ int can_move(int col, int lig){
     for(int i=0;i<8;i++){
         int possibleCol=col+deplacements[i].col;
         int possibleLig=lig+deplacements[i].lig;
-        if((possibleCol >=0 && possibleCol < 8 ) && (possibleLig >=0 && possibleLig < 8) && damier[col][lig] != PION)
+        if((possibleCol >=0 && possibleCol < 8 ) && (possibleLig >=0 && possibleLig < 8) && damier[possibleCol][possibleLig] != PION)
             return 1;
     }
     return 0;
@@ -406,38 +409,6 @@ static void coup_joueur(GtkWidget *p_case) {
         print_damier();
     }
 
-
-/*
-    char msg[50];
-
-    uint16_t taille_msg, type_ms;
-    char head[2];
-
-    printf("Client : alright time to send deez nuts\n");
-
-    snprintf(msg, 50, "%u,%u,", htons((uint16_t) lig), htons((uint16_t) col));
-
-    taille_msg=htons((uint16_t) strlen(msg));
-    memcpy(head, &taille_msg, 2);
-
-    if(newsockfd=-1){ // on est du côté client sinon, on est du côté serveur
-        type_ms = htons((uint16_t) '1');
-        send(sockfd, type_ms, 2, 0);
-        send(sockfd, head, 2, 0);
-
-        if(send(sockfd, msg, strlen(msg), 0) == -1) {
-            perror("send client");
-        }
-        printf("Client : sent deez nuts\n");
-    } else {
-        send(newsockfd, head, 2, 0);
-
-        if(send(newsockfd, msg, strlen(msg), 0) == -1) {
-            perror("send serveur");
-        }
-    }*/
-
-
 }
 
 /* Fonction retournant texte du champs adresse du serveur de l'interface graphique */
@@ -486,6 +457,9 @@ void affiche_fenetre_gagne(void) {
     gtk_dialog_run(GTK_DIALOG (dialog));
 
     gtk_widget_destroy(dialog);
+
+    exit(1);
+
 }
 
 /* Fonction affichant boite de dialogue si partie perdue */
@@ -499,6 +473,8 @@ void affiche_fenetre_perdu(void) {
     gtk_dialog_run(GTK_DIALOG (dialog));
 
     gtk_widget_destroy(dialog);
+
+    exit(1);
 }
 
 /* Fonction appelee lors du clique du bouton Se connecter */
@@ -786,6 +762,8 @@ static void * f_com_socket(void *p_arg){
                     gele_damier(); // Joueur jouant en deuxième
                 } else {
                     /* Reception et traitement des messages du joueur adverse */
+                    disable_button_start();
+
                     printf("\nReception des messages du joueur adverse\n");
 
                     printf("BL col : %d, BL lig : %d\n",bl_pos.col,bl_pos.lig);
@@ -813,6 +791,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
     /* Initialisation de GTK+ */
+    XInitThreads();
     gtk_init(&argc, &argv);
 
     /* Creation d'un nouveau GtkBuilder */
