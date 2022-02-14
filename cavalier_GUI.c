@@ -44,7 +44,7 @@ struct point2D deplacements[8] ={
 struct point2D bl_pos;
 struct point2D wh_pos;
 
-enum couleur { BL = 0, WH = 1, PION = 3, BL_PION = 4, WH_PION = 5 };
+enum couleur { BL = 0, WH = 1, PION = 3, DEFAULT=-1, AVAILABLE=-2 };
 
 int damier[8][8];    // tableau associe au damier
 int couleur;        // 0 : pour noir, 1 : pour blanc, 3 : pour pion, 4 : pion avec cavalier noir, 5 : pion avec cavalier blanc
@@ -176,6 +176,17 @@ void affiche_pion(int col, int lig) {
     gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_pion.png");
 }
 
+// Imprime le damier à des fins de débug
+void print_damier(){
+    for(int col=0;col<8;col++){
+        for(int lig=0;lig<8;lig++){
+            printf("%d ",damier[col][lig]);
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
+
 /* Fonction permettant afficher image cavalier noir dans case du damier (indiqué par sa colonne et sa ligne) */
 void affiche_cav_noir(int col, int lig) {
     char *coord;
@@ -187,15 +198,6 @@ void affiche_cav_noir(int col, int lig) {
     gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_cav_noir.png");
 }
 
-void print_damier(){
-    for(int col=0;col<8;col++){
-        for(int lig=0;lig<8;lig++){
-            printf("%d ",damier[col][lig]);
-        }
-        printf("\n");
-    }
-    printf("\n");
-}
 
 /* Fonction permettant afficher image cavalier blanc dans case du damier (indiqué par sa colonne et sa ligne) */
 void affiche_cav_blanc(int col, int lig) {
@@ -208,7 +210,7 @@ void affiche_cav_blanc(int col, int lig) {
     gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), "UI_Glade/case_cav_blanc.png");
 }
 
-
+// Remet à jour la map selon les valeurs du damier
 void refresh_map(){
     char *coord;
     coord = malloc(3 * sizeof(char));
@@ -217,16 +219,22 @@ void refresh_map(){
             indexes_to_coord(i, j, coord);
             int code=damier[i][j];
             if(code!=-1) {
-                char *imageUrl = get_image_from_code(code);
-                gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), imageUrl);
+                char *imageUrl;
                 if(code==-2){
                     damier[i][j]=-1;
+                    //Si la case était une case dispo au déplacement, on la réinitialise
+                    imageUrl = get_image_from_code(DEFAULT);
                 }
+                else{
+                    imageUrl = get_image_from_code(code);
+                }
+                gtk_image_set_from_file(GTK_IMAGE(gtk_builder_get_object(p_builder, coord)), imageUrl);
             }
         }
     }
 }
 
+//Permet de récupérer les images pour chaque code correspondant suivant l'enum
 char* get_image_from_code(int code){
     switch(code){
         case WH:
@@ -235,15 +243,17 @@ char* get_image_from_code(int code){
             return "UI_Glade/case_cav_noir.png";
         case PION:
             return "UI_Glade/case_pion.png";
-        case -2:
-            return "UI_Glade/case_def.png";
+        case AVAILABLE:
+            return "UI_Glade/case_dispo.png";
+        case DEFAULT:
+            return "UI_GLade/case_def.png";
         default:
             printf("Error code %d invalide",code);
             exit(-1);
     }
 }
 
-
+//Affiche les cases ou il est possible de se déplacer
 void affiche_deplacement(){
     char *coord;
     coord = malloc(3 * sizeof(char));
@@ -273,6 +283,7 @@ void affiche_deplacement(){
     print_damier();
 }
 
+//Vérifie si la position est comprise dans les cases disponibles
 int is_valid_pos(int lig,int col){
     int playerCol,playerLig;
     if(couleur==BL){
@@ -285,7 +296,7 @@ int is_valid_pos(int lig,int col){
     for(int i=0;i<8;i++){
         int availableCol=playerCol+deplacements[i].col;
         int availableLig=playerLig+deplacements[i].lig;
-        if (availableCol == col && availableLig == lig && damier[availableCol][availableLig]==-2 ){
+        if (availableCol == col && availableLig == lig && damier[availableCol][availableLig]==AVAILABLE ){
             return 1;
         }
     }
@@ -379,9 +390,8 @@ void send_message(int type_msg, struct point2D coords){
 
 /* Fonction appelee lors du clique sur une case du damier */
 static void coup_joueur(GtkWidget *p_case) {
-    //type_msg = 0 :
+    //type_msg = 0 : jeu
     //type_msg = 1 : win
-    //type_msg = 2 : lose
     int col, lig, type_msg, nb_piece, score;
 
 
